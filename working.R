@@ -23,6 +23,7 @@ Macro_select_m <- read.csv("Macro_select_m.csv")
 oil_set <- read.csv("oil_set.csv")
 Ineq_m <- read.csv("Ineq_m.csv")
 
+
 Monthly_working_data <- merge(merge(Macro_select_m, oil_set, by = c("Period")), Ineq_m, by = c("Period"))
 Monthly_working_data$Period <- as.yearmon(Monthly_working_data$Period, "%YM%m")
 rownames(Monthly_working_data) <- Monthly_working_data$Period
@@ -79,7 +80,18 @@ run_VAR <- function(df, var_names, lag_order, trend_order, result_name) {
   # return the result list
   return(result)
 }
-
+add_seasonal_adjusted_M <- function(df, var_name){
+  # 构建时间序列
+  ts_var <- ts(df[[var_name]], start = c(1977,1), end = c(2019,12), frequency = 12)
+  
+  # 进行季节调整
+  sa_var <- x13(ts_var)
+  
+  # 将季节调整后的序列添加到数据框
+  df[[paste(var_name, "sa", sep="_")]] <- sa_var$final$series[, "sa"]
+  
+  return(df)
+}
 
 
 
@@ -88,51 +100,47 @@ run_VAR <- function(df, var_names, lag_order, trend_order, result_name) {
 
 # seasonal adjustment 
 
-ts_Gini_tinc <- ts(Monthly_working_data$Gini_tinc
-              , start = c(1977, 1), end = c(2019, 12), frequency = 12)
-Gini_tinc.sa <- x13(ts_Gini_tinc)
-adf.test(Gini_tinc.sa$final$series[,c("sa")])# after seasonal adjusted it is still not stationary. 
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Gini_tinc")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Gini_texp")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Gini_wage")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Gini_energy")
 
-Monthly_working_data$Gini_tinc_sa <- Gini_tinc.sa$final$series[,c("sa")]
-
-
-
-ts_price <- ts(Monthly_working_data$price
-                   , start = c(1977, 1), end = c(2019, 12), frequency = 12)
-price.sa <- x13(ts_price)
-adf.test(price.sa$final$series[,c("sa")])# after seasonal adjusted it is still not stationary. 
-
-Monthly_working_data$price_sa <- price.sa$final$series[,c("sa")]
-Monthly_working_data$Log_price_sa <- log(price.sa$final$series[,c("sa")])
-adf.test(Monthly_working_data$Log_price_sa)# after seasonal adjusted it is still not stationary.
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_SD_tinc")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_SD_texp")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_SD_wage")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_SD_energy")
 
 
-
-
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_Diff_tinc")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_Diff_texp")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_Diff_wage")
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_Diff_energy")
 
 
 
 
 #test for stationary of data 
 adf.test(Monthly_working_data$log_CPI)
-adf.test(Monthly_working_data$log_indu)
+adf.test(diff(Monthly_working_data$log_indu))
+ n
 adf.test(Monthly_working_data$LIBOR)
-adf.test(Monthly_working_data$Neer)
+adf.test(diff(Monthly_working_data$Neer))
 adf.test(Monthly_working_data$Unempl)
 
 
 adf.test(Monthly_working_data$price)
-adf.test(Monthly_working_data$Log_price)
+adf.test(diff(Monthly_working_data$Log_price))
 
 
-adf.test(Monthly_working_data$Gini_tinc)
+adf.test(diff(Monthly_working_data$Gini_tinc))
+
 adf.test(Monthly_working_data$Log_SD_tinc)
 adf.test(Monthly_working_data$Log_Diff_tinc)
 adf.test(Monthly_working_data$Gini_texp)
 adf.test(Monthly_working_data$Log_SD_texp)
 adf.test(Monthly_working_data$Log_Diff_texp)
 
-plot.ts(Monthly_working_data[,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc")])
+plot.ts(Monthly_working_data[,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_energy_sa")])
 
 
 # plots
@@ -153,22 +161,22 @@ plot(Monthly_working_data$log_indu, type='l', main='Log indu over Time', xlab='T
 
 
 #inc
-selection_gini <- VARselect(Monthly_working_data[,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc_sa")], lag.max = 30, type = "both")
+selection_gini <- VARselect(Monthly_working_data[109:516,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_SD_tinc_sa")], lag.max = 30, type = "const")
 print(selection_gini$selection)
 
-tinc_gini <- run_VAR(Monthly_working_data,
-                  c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc_sa"),
-                  3,
+energy_gini <- run_VAR(Monthly_working_data[109:516,],
+                  c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_Diff_energy_sa"),
+                  4,
                   2,
                   "tinc_gini")
-summary(tinc_gini$VAR_model)
-print(tinc_gini$serial_test)
-print(tinc_gini$hetero_result)
-print(tinc_gini$normality_test)
+summary(energy_gini$VAR_model)
+print(energy_gini$serial_test)
+print(energy_gini$hetero_result)
+print(energy_gini$normality_test)
 tinc_gini$stability_test
+acf(residuals(energy_gini$VAR_model))
 
-
-
+plot(residuals(energy_gini$VAR_model)[,4], type = "l")
 
 ##########################
 # Cholesky decomposition #
@@ -212,28 +220,32 @@ b.mat <- diag(7)
 diag(b.mat) <- NA
 print(b.mat)
 
-Monthly_working_data$trend <- 1:nrow(Monthly_working_data)
-Monthly_working_data$trend2 <- (1:nrow(Monthly_working_data))^2
+Monthly_working_data[109:516,c("trend")]<- 1:nrow(Monthly_working_data[109:516,])
+Monthly_working_data[109:516,c("trend2")] <- (1:nrow(Monthly_working_data[109:516,]))^2
 
-exogen_df <- Monthly_working_data[, c("trend", "trend2")]
+exogen_df <- Monthly_working_data[109:516, c("trend", "trend2")]
+
 
 # Perform the VAR regression
-var_tinc_gini <- VAR(Monthly_working_data[, c("Log_price_sa","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc_sa")], 
-                p = 3, 
+var_energy_gini <- VAR(Monthly_working_data[109:516, c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_Diff_texp_sa")], 
+                p = 4, 
                 type = "const", 
                 exogen = exogen_df)
+
 
 #run SVAR
 
 # inc 
-svar_tinc_gini <- SVAR(var_tinc_gini, Amat = a.mat, Bmat = b.mat, max.iter = 10000, 
+svar_energy_gini <- SVAR(var_energy_gini, Amat = a.mat, Bmat = b.mat, max.iter = 10000, 
                  hessian = TRUE)
 
-IRF_tinc_gini <- irf(svar_tinc_gini, response = "Gini_tinc_sa", impulse = "Log_price_sa", 
-               n.ahead = 100, ortho = TRUE, boot = TRUE)
+IRF_energy_gini <- irf(svar_energy_gini, response = "Log_Diff_texp_sa", 
+               n.ahead = 100, ortho = TRUE, boot = TRUE,ci = 0.90)
+
 
 par(mfrow = c(1, 1), mar = c(2.2, 2.2, 1, 1), cex = 0.6)
-plot(IRF_tinc_gini)
+
+plot(IRF_energy_gini)
 
 
 
