@@ -93,10 +93,10 @@ add_seasonal_adjusted_M <- function(df, var_name){
   return(df)
 }
 
+# 
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Mean_tinc")
 
-
-
-
+Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Mean_wage")
 
 # seasonal adjustment 
 
@@ -120,20 +120,26 @@ Monthly_working_data <- add_seasonal_adjusted_M(Monthly_working_data, "Log_Diff_
 
 
 #test for stationary of data 
+Monthly_working_data_diff <- Monthly_working_data[2:516,]
+
+
 adf.test(Monthly_working_data$log_CPI)
 adf.test(diff(Monthly_working_data$log_indu))
- n
+
+Monthly_working_data_diff$diff_indu <- diff(Monthly_working_data$log_indu)
 adf.test(Monthly_working_data$LIBOR)
 adf.test(diff(Monthly_working_data$Neer))
+Monthly_working_data_diff$diff_neer <- diff(Monthly_working_data$Neer)
 adf.test(Monthly_working_data$Unempl)
 
 
 adf.test(Monthly_working_data$price)
 adf.test(diff(Monthly_working_data$Log_price))
+Monthly_working_data_diff$diff_price <- diff(Monthly_working_data$Log_price)
 
 
 adf.test(diff(Monthly_working_data$Gini_tinc))
-
+Monthly_working_data_diff$diff_gini_tinc <- diff(Monthly_working_data$Gini_tinc_sa)
 adf.test(Monthly_working_data$Log_SD_tinc)
 adf.test(Monthly_working_data$Log_Diff_tinc)
 adf.test(Monthly_working_data$Gini_texp)
@@ -161,19 +167,19 @@ plot(Monthly_working_data$log_indu, type='l', main='Log indu over Time', xlab='T
 
 
 #inc
-selection_gini <- VARselect(Monthly_working_data[109:516,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_SD_tinc_sa")], lag.max = 30, type = "const")
+selection_gini <- VARselect(Monthly_working_data[109:516,c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc_sa")], lag.max = 15, type = "const")
 print(selection_gini$selection)
 
 energy_gini <- run_VAR(Monthly_working_data[109:516,],
-                  c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_Diff_energy_sa"),
-                  4,
+                  c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc_sa"),
+                  5,
                   2,
                   "tinc_gini")
 summary(energy_gini$VAR_model)
 print(energy_gini$serial_test)
 print(energy_gini$hetero_result)
 print(energy_gini$normality_test)
-tinc_gini$stability_test
+plot(energy_gini$stability_test)
 acf(residuals(energy_gini$VAR_model))
 
 plot(residuals(energy_gini$VAR_model)[,4], type = "l")
@@ -225,12 +231,20 @@ Monthly_working_data[109:516,c("trend2")] <- (1:nrow(Monthly_working_data[109:51
 
 exogen_df <- Monthly_working_data[109:516, c("trend", "trend2")]
 
+Monthly_working_data_diff[,c("trend")]<- 1:nrow(Monthly_working_data_diff[,])
+Monthly_working_data_diff[,c("trend2")] <- (1:nrow(Monthly_working_data_diff[,]))^2
+
+exogen_df_diff <- Monthly_working_data_diff[, c("trend", "trend2")]
+
+
+
+
 
 # Perform the VAR regression
-var_energy_gini <- VAR(Monthly_working_data[109:516, c("Log_price","log_indu","log_CPI","LIBOR","Neer","Unempl","Log_Diff_texp_sa")], 
-                p = 4, 
+var_energy_gini <- VAR(Monthly_working_data_diff[, c("diff_price","diff_indu","log_CPI","LIBOR","diff_neer","Unempl","diff_gini_tinc")], 
+                p = 3, 
                 type = "const", 
-                exogen = exogen_df)
+                exogen = exogen_df_diff)
 
 
 #run SVAR
@@ -239,7 +253,8 @@ var_energy_gini <- VAR(Monthly_working_data[109:516, c("Log_price","log_indu","l
 svar_energy_gini <- SVAR(var_energy_gini, Amat = a.mat, Bmat = b.mat, max.iter = 10000, 
                  hessian = TRUE)
 
-IRF_energy_gini <- irf(svar_energy_gini, response = "Log_Diff_texp_sa", 
+
+IRF_energy_gini <- irf(svar_energy_gini, response = "diff_gini_tinc", 
                n.ahead = 100, ortho = TRUE, boot = TRUE,ci = 0.90)
 
 
@@ -258,17 +273,52 @@ plot(IRF_energy_gini)
 devtools::install_github('tylerJPike/sovereign')
 
 library(sovereign)### VAR in vars is replaced by VAR in sovereign
-svar_iv_tinc_gini <- sovereign::VAR(data = Monthly_working_data[, c("Oil.supply.news.shock","log_indu","log_CPI","LIBOR","Neer","Unempl","Gini_tinc","date")],
+Monthly_working_data$Gini_tinc_sa <- as.numeric(Monthly_working_data$Gini_tinc_sa)
+Monthly_working_data$Gini_texp_sa <- as.numeric(Monthly_working_data$Gini_texp_sa)
+Monthly_working_data$Gini_wage_sa <- as.numeric(Monthly_working_data$Gini_wage_sa)
+Monthly_working_data$Gini_energy_sa <- as.numeric(Monthly_working_data$Gini_energy_sa)
+
+Monthly_working_data$Log_SD_tinc_sa <- as.numeric(Monthly_working_data$Log_SD_tinc_sa)
+Monthly_working_data$Log_SD_texp_sa <- as.numeric(Monthly_working_data$Log_SD_texp_sa)
+Monthly_working_data$Log_SD_wage_sa <- as.numeric(Monthly_working_data$Log_SD_wage_sa)
+Monthly_working_data$Log_SD_energy_sa <- as.numeric(Monthly_working_data$Log_SD_energy_sa)
+
+Monthly_working_data$Log_Diff_tinc_sa <- as.numeric(Monthly_working_data$Log_Diff_tinc_sa)
+Monthly_working_data$Log_Diff_texp_sa <- as.numeric(Monthly_working_data$Log_Diff_texp_sa)
+Monthly_working_data$Log_Diff_wage_sa <- as.numeric(Monthly_working_data$Log_Diff_wage_sa)
+Monthly_working_data$Log_Diff_energy_sa <- as.numeric(Monthly_working_data$Log_Diff_energy_sa)
+
+time_trend <- lm(Gini_tinc_sa ~ trend+ trend2 , data = Monthly_working_data[109:516,])
+preditcted <- predict(time_trend)
+Monthly_working_data$Gini_tinc_detrend[109:516] <- Monthly_working_data$Gini_tinc_sa[109:516]-preditcted
+
+Monthly_working_data_short <- Monthly_working_data[109:516,]
+Monthly_working_data_short$Gini_tinc_detrend <- as.numeric(Monthly_working_data_short$Gini_tinc_detrend)
+is.na(Monthly_working_data_short$Gini_tinc_detrend)
+
+
+svar_iv_tinc_gini <- sovereign::VAR(data = Monthly_working_data_short[, 
+                                                                      c("Oil.supply.news.shock",
+                                                                        "Log_price",
+                                                                        "log_indu",
+                                                                        "log_CPI",
+                                                                        "LIBOR",
+                                                                        "Neer",
+                                                                        "Unempl",
+                                                                        "Gini_tinc_detrend",
+                                                                        "date")],
                                     horizon = 10,
                                     freq = "month",
                                     type = "const",
-                                    p = 3,
+                                    p = 5,
                                     structure = "IV",
                                     instrument = "Oil.supply.news.shock",
-                                    instrumented = "Gini_tinc")
+                                    instrumented = "Log_price")
 
-irf = IRF(svar_iv_tinc_gini,CI = c(0.05,0.95))
-
+irf =
+  IRF(
+    svar_iv_tinc_gini,
+    CI = c(0.05,0.95))
 # plot IRF
-plot_irf(irf, responses = "Gini_tinc")
+plot_irf(irf)
 
